@@ -1,8 +1,9 @@
 import os
 import csv
 import copy
-import argparse
 import itertools
+import threading
+import pygame.mixer
 
 import cv2
 import numpy as np
@@ -13,8 +14,31 @@ from model import KeyPointClassifier
 
 from utils.draw_hand import draw_bounding_rect, draw_landmarks, draw_info_text  
 
+def init_pygame_mixer():
+    pygame.mixer.init()
+    sounds = {}
+    sound_files = {
+        0: 'voices/backward.mp3',
+        1: 'voices/forward.mp3',
+        2: 'voices/right.mp3',
+        3: 'voices/left.mp3',
+        4: 'voices/speedup.mp3',
+        5: 'voices/speeddown.mp3'
+    }
+    for id, path in sound_files.items():
+        if os.path.exists(path):
+            sounds[id] = pygame.mixer.Sound(path)
+    return sounds
+
+def play_sound(hand_sign_id):
+    try:
+        if hand_sign_id in sounds and not pygame.mixer.get_busy():
+            sounds[hand_sign_id].play()
+    except Exception as e:
+        print(f"播放声音时出错: {e}")
+
 def main():
-    cap_device = 0
+    cap_device = 1
     cap_width = 640
     cap_height = 480
 
@@ -48,6 +72,10 @@ def main():
     with open(label_path, encoding='utf-8-sig') as f:
         keypoint_classifier_labels = csv.reader(f)
         keypoint_classifier_labels = [row[0] for row in keypoint_classifier_labels]
+
+    # 初始化声音
+    global sounds
+    sounds = init_pygame_mixer()
 
     # FPS计算模块
     cvFpsCalc = CvFpsCalc(buffer_len=10)
@@ -90,6 +118,9 @@ def main():
                 pre_processed_landmark_list = pre_process_landmark(landmark_list)
                 # 关键点分类
                 hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+
+                # 播放声音
+                threading.Thread(target=play_sound, args=(hand_sign_id,)).start()
 
         # 绘图
         debug_image = draw_bounding_rect(use_brect, debug_image, brect)
